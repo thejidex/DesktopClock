@@ -1,7 +1,6 @@
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
-from tkinter import ttk
 
 
 class SettingsWindow:
@@ -73,7 +72,6 @@ class SettingsWindow:
             self.create_window()
 
         self.window.deiconify()
-        self.window.geometry("430x600")
         self.window.update_idletasks()
         self.on_position_window(self.window)
         self.window.lift()
@@ -85,28 +83,22 @@ class SettingsWindow:
     def create_window(self):
         self.window = tk.Toplevel(self.parent)
         self.window.title("设置")
-        self.window.geometry("430x600")
         self.window.resizable(False, False)
         self.window.transient(self.parent)
         self.window.protocol("WM_DELETE_WINDOW", self.close)
 
-        notebook = ttk.Notebook(self.window)
-        notebook.pack(fill="both", expand=True, padx=18, pady=(18, 10))
-
-        function_tab = tk.Frame(notebook)
-        appearance_tab = tk.Frame(notebook)
-        window_tab = tk.Frame(notebook)
-        notebook.add(function_tab, text="功能")
-        notebook.add(appearance_tab, text="外观与显示")
-        notebook.add(window_tab, text="窗口")
+        content = tk.Frame(self.window)
+        content.pack(fill="both", expand=True, padx=18, pady=(12, 10))
+        content.columnconfigure(0, weight=1)
+        content.columnconfigure(1, weight=1)
 
         function_frame = tk.LabelFrame(
-            function_tab,
+            content,
             text="主窗口模式",
             padx=20,
             pady=14,
         )
-        function_frame.pack(fill="x", padx=18, pady=18)
+        function_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
 
         mode_options = (
             ("时钟", "clock"),
@@ -124,31 +116,31 @@ class SettingsWindow:
                 anchor="w",
             )
             option.grid(
-                row=index // 2,
-                column=index % 2,
+                row=0,
+                column=index,
                 sticky="ew",
                 padx=(0, 16),
                 pady=7,
             )
-        function_frame.columnconfigure(0, weight=1)
-        function_frame.columnconfigure(1, weight=1)
+        for column in range(4):
+            function_frame.columnconfigure(column, weight=1)
 
         mode_help = tk.Label(
-            function_tab,
+            content,
             text="倒计时、秒表和闹钟的操作控件会显示在主窗口底部。\n"
             "也可使用 Ctrl+Shift+1～4 快速切换。",
             justify="left",
             anchor="w",
         )
-        mode_help.pack(fill="x", padx=22)
+        mode_help.grid(row=1, column=0, columnspan=2, sticky="ew", padx=4, pady=(0, 10))
 
         appearance_frame = tk.LabelFrame(
-            appearance_tab,
+            content,
             text="外观",
             padx=20,
             pady=12,
         )
-        appearance_frame.pack(fill="x", padx=18, pady=(18, 10))
+        appearance_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10))
 
         theme_options = (
             ("深色", "dark"),
@@ -167,17 +159,20 @@ class SettingsWindow:
             option.pack(side="left", expand=True, fill="x", pady=3)
 
         background_frame = tk.LabelFrame(
-            appearance_tab,
+            content,
             text="背景",
             padx=20,
             pady=12,
         )
-        background_frame.pack(fill="x", padx=18, pady=(0, 10))
+        background_frame.grid(row=2, column=1, rowspan=3, sticky="nsew", pady=(0, 10))
 
         wallpaper_label = tk.Label(
             background_frame,
             textvariable=self.wallpaper_name,
             anchor="w",
+            wraplength=220,
+            width=24,
+            justify="left",
         )
         wallpaper_label.pack(fill="x", pady=(0, 10))
 
@@ -218,12 +213,12 @@ class SettingsWindow:
         darkness_scale.pack(fill="x")
 
         display_frame = tk.LabelFrame(
-            appearance_tab,
+            content,
             text="显示",
             padx=20,
             pady=12,
         )
-        display_frame.pack(fill="x", padx=18, pady=(0, 18))
+        display_frame.grid(row=3, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10))
 
         show_date_button = tk.Checkbutton(
             display_frame,
@@ -253,12 +248,12 @@ class SettingsWindow:
         show_seconds_button.pack(fill="x", pady=3)
 
         window_frame = tk.LabelFrame(
-            window_tab,
+            content,
             text="窗口",
             padx=20,
             pady=12,
         )
-        window_frame.pack(fill="x", padx=18, pady=18)
+        window_frame.grid(row=4, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10))
 
         desktop_mode_button = tk.Checkbutton(
             window_frame,

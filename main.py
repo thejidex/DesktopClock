@@ -98,6 +98,33 @@ user32.SetWindowPos.argtypes = (
     wintypes.UINT,
 )
 user32.SetWindowPos.restype = wintypes.BOOL
+user32.LoadImageW.argtypes = (
+    wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+    ctypes.c_int, ctypes.c_int, wintypes.UINT,
+)
+user32.LoadImageW.restype = wintypes.HANDLE
+user32.SendMessageW.argtypes = (
+    wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+)
+user32.SendMessageW.restype = wintypes.LPARAM
+
+
+def set_taskbar_icons(window):
+    # Tk can recreate the native window when switching borderless modes.
+    # Apply both icons directly to the current Windows window each time.
+    if not hasattr(window, "taskbar_icons"):
+        window.taskbar_icons = []
+        for kind, metric in ((0, 49), (1, 11)):
+            size = user32.GetSystemMetrics(metric)
+            icon = user32.LoadImageW(
+                None, str(resource_path("assets/desktop-clock.ico")),
+                1, size, size, 0x0010 | 0x8000,
+            )
+            if icon:
+                window.taskbar_icons.append((kind, icon))
+    handle = get_window_handle(window)
+    for kind, icon in window.taskbar_icons:
+        user32.SendMessageW(handle, 0x0080, kind, icon)
 
 
 def get_window_handle(window):
@@ -459,6 +486,7 @@ def main():
     def refresh_taskbar_style(event=None):
         if is_fullscreen or desktop_mode:
             configure_taskbar_window(window)
+        set_taskbar_icons(window)
 
     def apply_window_style():
         borderless = is_fullscreen or desktop_mode
@@ -467,6 +495,7 @@ def main():
         if borderless:
             configure_taskbar_window(window)
             window.after(0, refresh_taskbar_style)
+        set_taskbar_icons(window)
 
     def apply_topmost_state():
         window_handle = get_window_handle(window)

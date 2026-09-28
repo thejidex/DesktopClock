@@ -17,7 +17,7 @@ from time_tools import (
     format_duration,
     is_alarm_due,
 )
-from wallpaper import create_wallpaper_photo, load_wallpaper
+from wallpaper import VideoWallpaper, create_wallpaper_photo, load_wallpaper
 
 
 MONITOR_DEFAULTTONULL = 0
@@ -37,8 +37,6 @@ SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
 SWP_SHOWWINDOW = 0x0040
-SW_HIDE = 0
-SW_SHOW = 5
 APP_USER_MODEL_ID = "DesktopClock.DesktopClock.1.0"
 
 
@@ -84,10 +82,6 @@ user32.GetWindowLongPtrW.argtypes = (wintypes.HWND, ctypes.c_int)
 user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
 user32.SetWindowLongPtrW.argtypes = (wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t)
 user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
-user32.IsWindowVisible.argtypes = (wintypes.HWND,)
-user32.IsWindowVisible.restype = wintypes.BOOL
-user32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
-user32.ShowWindow.restype = wintypes.BOOL
 user32.SetWindowPos.argtypes = (
     wintypes.HWND,
     wintypes.HWND,
@@ -147,31 +141,19 @@ def configure_taskbar_window(window):
         minimizable_style != window_style or taskbar_style != extended_style
     )
     if style_changed:
-        was_visible = bool(user32.IsWindowVisible(window_handle))
-        if was_visible:
-            user32.ShowWindow(window_handle, SW_HIDE)
+        if minimizable_style != window_style:
+            previous_style = user32.SetWindowLongPtrW(
+                window_handle, GWL_STYLE, minimizable_style,
+            )
+            if not previous_style:
+                raise ctypes.WinError()
 
-        try:
-            if minimizable_style != window_style:
-                previous_style = user32.SetWindowLongPtrW(
-                    window_handle,
-                    GWL_STYLE,
-                    minimizable_style,
-                )
-                if not previous_style:
-                    raise ctypes.WinError()
-
-            if taskbar_style != extended_style:
-                previous_style = user32.SetWindowLongPtrW(
-                    window_handle,
-                    GWL_EXSTYLE,
-                    taskbar_style,
-                )
-                if not previous_style:
-                    raise ctypes.WinError()
-        finally:
-            if was_visible:
-                user32.ShowWindow(window_handle, SW_SHOW)
+        if taskbar_style != extended_style:
+            previous_style = user32.SetWindowLongPtrW(
+                window_handle, GWL_EXSTYLE, taskbar_style,
+            )
+            if not previous_style:
+                raise ctypes.WinError()
 
     if not user32.SetWindowPos(
         window_handle,
@@ -355,6 +337,7 @@ def main():
     wallpaper_original = None
     wallpaper_photo = None
     current_wallpaper_path = None
+    current_wallpaper_type = "none"
     wallpaper_resize_job = None
     geometry_save_job = None
     wallpaper_darkness = saved_config["wallpaper_darkness"]
@@ -381,6 +364,7 @@ def main():
     mode_font = tkfont.Font(family="Microsoft YaHei UI", size=13, weight="bold")
 
     wallpaper_item = clock_canvas.create_image(0, 0, anchor="nw")
+    video_wallpaper = None
     time_item = clock_canvas.create_text(
         0,
         0,
@@ -445,6 +429,8 @@ def main():
             {
                 "theme": current_theme,
                 "wallpaper": current_wallpaper_path,
+                "wallpaper_type": current_wallpaper_type,
+                "wallpaper_path": current_wallpaper_path,
                 "wallpaper_darkness": wallpaper_darkness,
                 "show_date": show_date,
                 "show_weekday": show_weekday,
@@ -603,6 +589,7 @@ def main():
             settings_window.open(
                 current_theme,
                 current_wallpaper_path,
+                current_wallpaper_type,
                 wallpaper_darkness,
                 show_date,
                 show_weekday,
@@ -751,11 +738,53 @@ def main():
 
         wallpaper_darkness = max(0, min(70, int(value)))
         settings_window.set_wallpaper_darkness(wallpaper_darkness)
+        video_wallpaper.set_darkness(wallpaper_darkness)
         schedule_wallpaper_resize()
         save_current_config()
 
+    def video_error(message):
+        nonlocal current_wallpaper_path, current_wallpaper_type
+
+        clock_canvas.itemconfigure(wallpaper_item, image="")
+        current_wallpaper_path = None
+        current_wallpaper_type = "none"
+        settings_window.set_current_wallpaper(None)
+        save_current_config()
+        if settings_window.is_open():
+            messagebox.showerror("视频壁纸错误", message, parent=settings_window.window)
+
+    video_wallpaper = VideoWallpaper(window, clock_canvas, wallpaper_item, video_error)
+
+    def select_video_wallpaper(file_path, show_error=True, save_changes=True):
+        nonlocal wallpaper_original, wallpaper_photo
+        nonlocal current_wallpaper_path, current_wallpaper_type
+
+        try:
+            full_path = str(Path(file_path).expanduser().resolve())
+            if Path(full_path).suffix.lower() not in (".mp4", ".avi", ".mov", ".mkv", ".webm"):
+                raise ValueError("请选择 MP4、AVI、MOV、MKV 或 WebM 视频")
+            if not Path(full_path).is_file():
+                raise FileNotFoundError("视频文件不存在，请重新选择。")
+            video_wallpaper.start(full_path, wallpaper_darkness)
+        except Exception as error:
+            if show_error:
+                parent = settings_window.window if settings_window.is_open() else window
+                messagebox.showerror("视频壁纸错误", str(error), parent=parent)
+            return False
+
+        cancel_wallpaper_resize()
+        wallpaper_original = None
+        wallpaper_photo = None
+        current_wallpaper_path = full_path
+        current_wallpaper_type = "video"
+        settings_window.set_current_wallpaper(full_path, "video")
+        if save_changes:
+            save_current_config()
+        return True
+
     def select_wallpaper(file_path, show_error=True, save_changes=True):
         nonlocal wallpaper_original, wallpaper_photo, current_wallpaper_path
+        nonlocal current_wallpaper_type
 
         try:
             full_path = str(Path(file_path).expanduser().resolve())
@@ -780,26 +809,36 @@ def main():
             return False
 
         cancel_wallpaper_resize()
+        video_wallpaper.stop()
         wallpaper_original = new_image
         wallpaper_photo = new_photo
         current_wallpaper_path = full_path
+        current_wallpaper_type = "image"
         show_wallpaper_photo(wallpaper_photo)
-        settings_window.set_current_wallpaper(current_wallpaper_path)
+        settings_window.set_current_wallpaper(current_wallpaper_path, "image")
         if save_changes:
             save_current_config()
         return True
 
     def clear_wallpaper():
         nonlocal wallpaper_original, wallpaper_photo, current_wallpaper_path
+        nonlocal current_wallpaper_type
 
         cancel_wallpaper_resize()
+        video_wallpaper.stop()
         clock_canvas.itemconfigure(wallpaper_item, image="")
         wallpaper_original = None
         wallpaper_photo = None
         current_wallpaper_path = None
+        current_wallpaper_type = "none"
         apply_theme(current_theme, save_changes=False)
         settings_window.set_current_wallpaper(None)
         save_current_config()
+
+    def select_wallpaper_by_type(kind, file_path):
+        if kind == "video":
+            return select_video_wallpaper(file_path)
+        return select_wallpaper(file_path)
 
     def enter_fullscreen():
         nonlocal is_fullscreen, fullscreen_transition, last_normal_geometry
@@ -840,6 +879,7 @@ def main():
 
         fullscreen_transition = False
         schedule_wallpaper_resize()
+        video_wallpaper.resize(monitor_width, monitor_height)
 
     def toggle_fullscreen(event=None):
         if fullscreen_transition:
@@ -876,6 +916,7 @@ def main():
             return
 
         schedule_wallpaper_resize()
+        video_wallpaper.resize(event.width, event.height)
 
         scale = min(event.width / 520, event.height / 240)
         time_size = max(28, min(140, round(48 * scale)))
@@ -1270,7 +1311,7 @@ def main():
     settings_window = SettingsWindow(
         window,
         apply_theme,
-        select_wallpaper,
+        select_wallpaper_by_type,
         clear_wallpaper,
         set_wallpaper_darkness,
         set_show_date,
@@ -1284,6 +1325,7 @@ def main():
 
     window.bind("<Configure>", resize_fonts)
     window.bind("<Map>", refresh_taskbar_style)
+    window.protocol("WM_DELETE_WINDOW", lambda: (video_wallpaper.stop(), window.destroy()))
     clock_canvas.bind("<ButtonPress-1>", start_window_drag)
     clock_canvas.bind("<B1-Motion>", drag_window)
     clock_canvas.bind("<ButtonRelease-1>", stop_window_drag)
@@ -1311,13 +1353,12 @@ def main():
     move_window_to_visible_area(window)
     last_normal_geometry = get_window_geometry(window)
     save_current_config()
-    saved_wallpaper = saved_config["wallpaper"]
-    if saved_wallpaper is not None:
-        restored = select_wallpaper(
-            saved_wallpaper,
-            show_error=False,
-            save_changes=False,
-        )
+    saved_wallpaper = saved_config["wallpaper_path"]
+    saved_wallpaper_type = saved_config["wallpaper_type"]
+    if saved_wallpaper and saved_wallpaper_type in ("image", "video"):
+        restore = (select_video_wallpaper if saved_wallpaper_type == "video"
+                   else select_wallpaper)
+        restored = restore(saved_wallpaper, show_error=False, save_changes=False)
         if not restored:
             save_current_config()
     update_time()

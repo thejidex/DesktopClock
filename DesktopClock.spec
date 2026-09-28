@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all
+
+av_datas, av_binaries, av_hiddenimports = collect_all('av')
+
 
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
-    datas=[('assets/desktop-clock.ico', 'assets')],
-    hiddenimports=[],
+    binaries=av_binaries,
+    datas=[('assets/desktop-clock.ico', 'assets')] + av_datas,
+    hiddenimports=av_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

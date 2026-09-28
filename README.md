@@ -1,6 +1,6 @@
 # Desktop Clock
 
-Desktop Clock 是一个面向 Windows 的轻量桌面时钟程序，使用 Python、Tkinter 和 Pillow 开发。程序支持桌面无边框模式、多显示器真正全屏、预置主题和自定义壁纸，并提供简单的设置窗口。
+Desktop Clock 是一个面向 Windows 的桌面时钟程序，使用 Python、Tkinter、Pillow 和 PyAV 开发。程序支持桌面无边框模式、多显示器真正全屏、预置主题、静态图片及本地视频动态壁纸，并提供简单的设置窗口。
 
 当前版本：Desktop Clock v1.1.0
 
@@ -15,10 +15,12 @@ Desktop Clock 是一个面向 Windows 的轻量桌面时钟程序，使用 Pytho
 - 根据窗口大小自动调整时间和日期字体
 - 内置 Dark、Light、OLED 三种主题
 - 支持 PNG、JPG、JPEG 和 WebP 自定义壁纸
+- 支持本地 MP4、AVI、MOV、MKV 和 WebM 视频动态壁纸；自动播放、静音、循环，不显示播放控件
 - 壁纸等比例 Cover 缩放、居中裁剪
 - 可调节 0%～70% 的壁纸暗化程度
 - 可分别控制日期和星期是否显示
 - Canvas 文字叠加，时间和日期直接显示在壁纸上
+- 视频解码在后台线程进行，窗口缩放时按比例铺满并居中裁剪
 - 桌面无边框模式，并保留 Windows 任务栏应用图标和原生最小化行为
 - 桌面模式下支持鼠标拖动窗口和跨显示器移动
 - 可选始终置顶
@@ -73,6 +75,12 @@ py -3 -m venv .venv
 
 程序每次启动时保持普通窗口或已保存的桌面模式，不会恢复为真正全屏状态。
 
+## 动态壁纸
+
+在设置窗口的“背景”中选择无壁纸、图片壁纸或视频壁纸，也可直接点击“选择图片”或“选择视频”。选中文件后立即应用。视频默认静音、播放结束自动循环；切换或退出时停止并释放视频文件。视频不会修改 Windows 系统桌面壁纸。
+
+视频支持的容器与实际能播放的编码取决于 PyAV wheel 随附的 FFmpeg 解码器。无法解码的视频会提示错误，保留当前背景；已保存的视频文件丢失时，启动会回退到主题纯色背景。高分辨率视频会优先使用 Windows 硬件解码，直接播放原文件，不需要等待转码，也不会降低源视频分辨率。设备不支持硬件解码时会使用软件解码，播放速度取决于电脑性能。
+
 ## 时间工具操作
 
 使用 `Ctrl+S` 打开设置，在“功能”页选择主窗口模式。时钟模式仍保持简洁，只显示时间以及已启用的日期和星期；其它模式会在主窗口底部显示必要控件。
@@ -96,7 +104,7 @@ py -3 -m venv .venv
 .\build.ps1
 ```
 
-构建脚本使用项目自己的 `.venv\Scripts\python.exe` 调用 PyInstaller，并生成单文件、无控制台窗口的 Windows 程序。
+构建脚本使用项目自己的 `.venv\Scripts\python.exe` 调用 PyInstaller，并生成单文件、无控制台窗口的 Windows 程序。脚本和 `DesktopClock.spec` 都收集 PyAV 的 FFmpeg 动态库，无需在用户电脑上单独安装 FFmpeg。请在 Windows 上构建 Windows EXE。
 单文件程序不依赖固定盘符。运行时会在 EXE 当前工作目录创建一个临时的
 `_MEI...` 资源目录，正常退出后会自动删除；请把 EXE 放在桌面、下载目录
 或其它当前用户可写的文件夹中运行。
@@ -133,7 +141,7 @@ $env:DESKTOP_CLOCK_DATA_DIR = "D:\DesktopClockData"
 配置文件保存以下内容：
 
 - 当前主题
-- 壁纸原始文件的完整路径
+- 壁纸类型 `wallpaper_type`（`none`、`image`、`video`）和原始文件的完整路径 `wallpaper_path`
 - 壁纸暗化程度
 - 日期和星期显示状态
 - 是否显示秒
@@ -154,7 +162,7 @@ $env:DESKTOP_CLOCK_DATA_DIR = "D:\DesktopClockData"
 | `time_tools.py` | 使用 `time.monotonic()` 实现倒计时和秒表状态计算 |
 | `settings.py` | 使用 Tkinter `Toplevel` 创建和管理设置窗口 |
 | `themes.py` | 保存 Dark、Light、OLED 主题定义 |
-| `wallpaper.py` | 使用 Pillow 加载、缩放、裁剪壁纸并添加暗色遮罩 |
+| `wallpaper.py` | 使用 Pillow 处理图片，用 PyAV 在后台解码视频并绘制 Canvas 背景 |
 | `config.py` | 读取、校验、迁移和保存配置 |
 | `assets/` | 保存应用图标等运行时资源 |
 | `build.ps1` | Windows PyInstaller 自动构建脚本 |
@@ -166,6 +174,7 @@ $env:DESKTOP_CLOCK_DATA_DIR = "D:\DesktopClockData"
 - Python 3
 - Tkinter
 - Pillow
+- PyAV（包含 FFmpeg 视频解码库）
 - Win32 API（通过 `ctypes` 调用）
 - PyInstaller
 

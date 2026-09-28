@@ -6,9 +6,11 @@ from pathlib import Path
 
 
 DEFAULT_CONFIG = {
-    "config_version": 3,
+    "config_version": 4,
     "theme": "dark",
     "wallpaper": None,
+    "wallpaper_type": "none",
+    "wallpaper_path": None,
     "wallpaper_darkness": 30,
     "show_date": True,
     "show_weekday": True,
@@ -192,6 +194,16 @@ def load_config():
     if wallpaper is None or isinstance(wallpaper, str):
         config["wallpaper"] = wallpaper
 
+    wallpaper_type = saved_config.get("wallpaper_type")
+    wallpaper_path = saved_config.get("wallpaper_path")
+    if wallpaper_type in ("none", "image", "video"):
+        config["wallpaper_type"] = wallpaper_type
+        if isinstance(wallpaper_path, str) and wallpaper_path:
+            config["wallpaper_path"] = wallpaper_path
+    elif config["wallpaper"]:
+        config["wallpaper_type"] = "image"
+        config["wallpaper_path"] = config["wallpaper"]
+
     wallpaper_darkness = saved_config.get("wallpaper_darkness")
     if isinstance(wallpaper_darkness, int) and not isinstance(
         wallpaper_darkness,
@@ -245,6 +257,13 @@ def save_config(config):
         wallpaper = config.get("wallpaper")
         if wallpaper is None or isinstance(wallpaper, str):
             config_to_save["wallpaper"] = wallpaper
+
+        wallpaper_type = config.get("wallpaper_type")
+        wallpaper_path = config.get("wallpaper_path")
+        if wallpaper_type in ("none", "image", "video"):
+            config_to_save["wallpaper_type"] = wallpaper_type
+            if isinstance(wallpaper_path, str) and wallpaper_path:
+                config_to_save["wallpaper_path"] = wallpaper_path
 
         wallpaper_darkness = config.get("wallpaper_darkness")
         if isinstance(wallpaper_darkness, int) and not isinstance(

@@ -34,6 +34,8 @@ class SettingsWindow:
         self.window = None
         self.selected_theme = tk.StringVar(master=parent, value="dark")
         self.wallpaper_name = tk.StringVar(master=parent, value="未选择壁纸")
+        self.wallpaper_type = tk.StringVar(master=parent, value="none")
+        self.current_wallpaper_type = "none"
         self.wallpaper_darkness = tk.IntVar(master=parent, value=30)
         self.wallpaper_darkness_text = tk.StringVar(
             master=parent,
@@ -50,6 +52,7 @@ class SettingsWindow:
         self,
         current_theme,
         current_wallpaper_path,
+        current_wallpaper_type,
         wallpaper_darkness,
         show_date,
         show_weekday,
@@ -59,7 +62,7 @@ class SettingsWindow:
         always_on_top,
     ):
         self.selected_theme.set(current_theme)
-        self.set_current_wallpaper(current_wallpaper_path)
+        self.set_current_wallpaper(current_wallpaper_path, current_wallpaper_type)
         self.set_wallpaper_darkness(wallpaper_darkness)
         self.set_show_date(show_date)
         self.set_show_weekday(show_weekday)
@@ -166,6 +169,14 @@ class SettingsWindow:
         )
         background_frame.grid(row=2, column=1, rowspan=3, sticky="nsew", pady=(0, 10))
 
+        for label, kind in (("无壁纸", "none"), ("图片壁纸", "image"),
+                            ("视频壁纸", "video")):
+            tk.Radiobutton(
+                background_frame, text=label, value=kind,
+                variable=self.wallpaper_type, command=self.change_wallpaper_type,
+                anchor="w",
+            ).pack(fill="x")
+
         wallpaper_label = tk.Label(
             background_frame,
             textvariable=self.wallpaper_name,
@@ -181,17 +192,16 @@ class SettingsWindow:
 
         choose_button = tk.Button(
             wallpaper_buttons,
-            text="选择壁纸...",
+            text="选择图片...",
             command=self.choose_wallpaper,
         )
-        choose_button.pack(side="left", expand=True, fill="x", padx=(0, 5))
+        choose_button.pack(fill="x", pady=(0, 4))
 
-        clear_button = tk.Button(
+        tk.Button(
             wallpaper_buttons,
-            text="清除壁纸",
-            command=self.clear_wallpaper,
-        )
-        clear_button.pack(side="left", expand=True, fill="x", padx=(5, 0))
+            text="选择视频...",
+            command=self.choose_video,
+        ).pack(fill="x")
 
         darkness_label = tk.Label(
             background_frame,
@@ -343,12 +353,35 @@ class SettingsWindow:
             ),
         )
         if file_path:
-            self.on_wallpaper_change(file_path)
+            self.on_wallpaper_change("image", file_path)
+
+    def choose_video(self):
+        file_path = filedialog.askopenfilename(
+            parent=self.window,
+            title="选择视频壁纸",
+            filetypes=(("视频文件", "*.mp4 *.avi *.mov *.mkv *.webm"),
+                       ("所有文件", "*.*")),
+        )
+        if file_path:
+            self.on_wallpaper_change("video", file_path)
+
+    def change_wallpaper_type(self):
+        kind = self.wallpaper_type.get()
+        if kind == "none":
+            self.clear_wallpaper()
+        elif kind == "image":
+            self.choose_wallpaper()
+        else:
+            self.choose_video()
+        # The dialog may be cancelled or the selected file may fail to open.
+        self.wallpaper_type.set(self.current_wallpaper_type)
 
     def clear_wallpaper(self):
         self.on_wallpaper_clear()
 
-    def set_current_wallpaper(self, file_path):
+    def set_current_wallpaper(self, file_path, wallpaper_type="none"):
+        self.current_wallpaper_type = wallpaper_type
+        self.wallpaper_type.set(wallpaper_type)
         if file_path:
             self.wallpaper_name.set(Path(file_path).name)
         else:

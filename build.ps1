@@ -112,6 +112,8 @@ $PyInstallerArgs = @(
     $IconPath
     "--add-data"
     "$IconPath;assets"
+    "--collect-all"
+    "av"
     "--specpath"
     $GeneratedSpecDir
     "main.py"

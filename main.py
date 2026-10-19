@@ -20,7 +20,7 @@ from time_tools import (
 from wallpaper import VideoWallpaper, create_wallpaper_photo, load_wallpaper
 
 
-MONITOR_DEFAULTTONULL = 0
+MONITOR_DEFAULTTOPRIMARY = 1
 MONITOR_DEFAULTTONEAREST = 2
 GA_ROOT = 2
 GWL_STYLE = -16
@@ -76,8 +76,12 @@ user32.GetAncestor.argtypes = (wintypes.HWND, wintypes.UINT)
 user32.GetAncestor.restype = wintypes.HWND
 user32.MonitorFromWindow.argtypes = (wintypes.HWND, wintypes.DWORD)
 user32.MonitorFromWindow.restype = wintypes.HMONITOR
+user32.MonitorFromPoint.argtypes = (wintypes.POINT, wintypes.DWORD)
+user32.MonitorFromPoint.restype = wintypes.HMONITOR
 user32.GetMonitorInfoW.argtypes = (wintypes.HMONITOR, ctypes.POINTER(MONITORINFO))
 user32.GetMonitorInfoW.restype = wintypes.BOOL
+user32.GetWindowRect.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.RECT))
+user32.GetWindowRect.restype = wintypes.BOOL
 user32.GetWindowLongPtrW.argtypes = (wintypes.HWND, ctypes.c_int)
 user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
 user32.SetWindowLongPtrW.argtypes = (wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t)
@@ -237,21 +241,33 @@ def get_monitor_work_area(window):
     return get_rectangle_bounds(monitor_info.rcWork)
 
 
-def is_window_visible_on_a_monitor(window):
-    return get_monitor_info(window, MONITOR_DEFAULTTONULL) is not None
+def get_primary_monitor_work_area():
+    # Windows 主屏的左上角固定为 (0, 0)，与副屏的排列位置无关。
+    monitor = user32.MonitorFromPoint(wintypes.POINT(0, 0), MONITOR_DEFAULTTOPRIMARY)
+    if not monitor:
+        raise ctypes.WinError()
+
+    monitor_info = MONITORINFO()
+    monitor_info.cbSize = ctypes.sizeof(MONITORINFO)
+    if not user32.GetMonitorInfoW(monitor, ctypes.byref(monitor_info)):
+        raise ctypes.WinError()
+
+    return get_rectangle_bounds(monitor_info.rcWork)
 
 
-def move_window_to_visible_area(window):
-    if is_window_visible_on_a_monitor(window):
-        return False
+def center_window_on_primary_monitor(window):
+    window_handle = get_window_handle(window)
+    window_rectangle = wintypes.RECT()
+    if not user32.GetWindowRect(window_handle, ctypes.byref(window_rectangle)):
+        raise ctypes.WinError()
 
-    work_left, work_top, work_width, work_height = get_monitor_work_area(window)
-    width = min(window.winfo_width(), work_width)
-    height = min(window.winfo_height(), work_height)
+    work_left, work_top, work_width, work_height = get_primary_monitor_work_area()
+    # 使用包含标题栏和边框的窗口大小，确保整个窗口都在可见工作区内。
+    width = min(window_rectangle.right - window_rectangle.left, work_width)
+    height = min(window_rectangle.bottom - window_rectangle.top, work_height)
     new_x = work_left + max(0, (work_width - width) // 2)
     new_y = work_top + max(0, (work_height - height) // 2)
 
-    window_handle = get_window_handle(window)
     if not user32.SetWindowPos(
         window_handle,
         wintypes.HWND(0),
@@ -264,7 +280,6 @@ def move_window_to_visible_area(window):
         raise ctypes.WinError()
 
     window.update_idletasks()
-    return True
 
 
 def position_window_near_parent(parent, child):
@@ -328,6 +343,8 @@ def main():
         initial_geometry = DEFAULT_CONFIG["window_geometry"]
         initial_width, initial_height, _, _ = parse_window_geometry(initial_geometry)
         window.geometry(f"{initial_width}x{initial_height}")
+    # 启动时仅恢复大小；旧坐标可能属于已经移动或断开的显示器。
+    initial_geometry = f"{initial_width}x{initial_height}"
     window.minsize(360, 220)
     is_fullscreen = False
     fullscreen_transition = False
@@ -1350,7 +1367,7 @@ def main():
     set_always_on_top(always_on_top, save_changes=False)
     position_clock_items(520, 240)
     window.update_idletasks()
-    move_window_to_visible_area(window)
+    center_window_on_primary_monitor(window)
     last_normal_geometry = get_window_geometry(window)
     save_current_config()
     saved_wallpaper = saved_config["wallpaper_path"]
